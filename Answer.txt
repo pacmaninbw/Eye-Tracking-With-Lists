@@ -1,0 +1,302 @@
+Nice question, it deserved more attention then it got when it was posted. It might have gotten more attention if you had only posted the contents of page 2 and page 3 (the program requirements).
+
+It's not clear to that the modular programming requirement was met, since that might have
+indicated that the program should have been broken up into multiple C and header files
+and been built as a project in visual studio, eclipse or Xcode. The struct declarations at
+least could have been in header files. There could have been one C file for each of the
+structs which exclusively manipulated that particular struct.
+
+It might have been easier to implement and debug the program if each of the `list` types (webNamesNode, webNamesRecord and detailsRecord) had common list functions such as insert(node, list), add(node, list) and delete(node, list).
+
+**Possible Bugs**
+
+There is a possible bug in `load_data_points()`, l2 may be used before it is defined in the following code:
+
+            //the most important part!!!//////////////////////////////////////////////////////////////////////////
+            //compares web names to make node for main list and list record for sublist
+            if( strcmp(StimuliName, previousStimuliName) != 0)
+            {
+                makeNodeForMainList(l1, StimuliName);
+                l2 = makeSubList();
+            }
+            
+            //starts to put values into sublist
+            makeNodeForSubList(l2, FixationIndex, Timestamp, FixationDuration, FixationPointX, FixationPointY);
+
+As a side note, the comment //the most important part! doesn't explain **why** it is the most important part.
+
+A second possible future bug is that in the following code pointers are not initialized to NULL.
+
+        struct webNamesRecord *l1;
+        struct detailsRecord *l2;
+
+If either of these pointers is tested for != NULL they may fail the test.
+
+        
+**Portability**
+
+*Use Common Library Routines Whenever Possible*
+
+The code is not portable because it uses the function char* strlwr(char* str). strlwr() is only available
+some operating systems and the code may not link in some cases. See the first answer to this [stackoverflow question][1].
+
+*Prefer powers of Two When Creating String Sizes*
+
+There are many places in the code where the a character array is defined as
+
+    char StimuliName[50];
+    char previousStimuliName[50] = "web";
+
+It might be better to size character arrays and strings on based word size, not doing so can sometimes result in
+memory alignment errors. At minimum use some power of 2 as a character array / string size. One possible
+way to do this might be
+
+    #define CHARS_IN_WORD sizeof(int) // gives the number of characters in an int which is the basic C size.
+    #define COMMON_STRING_LENGTH	80 * CHARS_IN_WORD
+
+or alternately
+
+    #define COMMON_STRING_LENGTH	80 * sizeof(int)
+
+    char characterArray[COMMON_STRING_LENGTH];
+
+Please note that using a symbolic constant such as COMMON_STRING_LENGTH makes it much easier in the future if
+the size of an array needs to change. This allows the code to be changed in only one place to change all of
+the arrays and change any for loops that may depend on the size. The words used might indicate what the
+number means as well which can help in debugging or if someone else needs to modify the code.
+
+Numeric constants in code are sometimes refered to as **Magic Numbers**.
+
+*Provide Enough Memory for a Full File Specification in a File Name or a Full Web Address*
+
+In the function `main()` there is the following code
+
+       char fileName[20], pageName[50];
+
+There are 2 problems with this code, the first being that numeric constants rather than symbolic constants
+are used which may make it difficult to to resize these variables, the second and possibly more major problem
+is that these simply aren't large enough to hold the possible values of a full file specification or a full
+web page address.
+
+A full file specification includes the full path from the root directory to the file, including the local
+file name. A windows file specification might be `C:\user\documents\FILENAME.EXT`. A Unix/Linux file
+specification might be `/Users/USERNAME/Documents/a-eye-analysing-eye-tracking-data/P1.txt`. The file to
+be opened may not be in the local directory and therefore enough space for the full path should be
+allowed. The size of fileName could quite easily cause the program to fail to load the file.
+
+The same can also be true of a web page address, the page address is not guarenteed to be at the top level
+of the domain and generally the `http://` portion should be attached as well. As an example, the URL of this
+question which is a webpage is `https://codereview.stackexchange.com/questions/146870/a-eye-analysing-eye-tracking-data`.
+
+File systems differ on different operating systems. A symbolic constant such as PATH_MAX, MAXPATHLEN, or
+FILENAME_MAX can generally be found in one of the common header files (stdio.h for example) that defines
+the maximum file name size allowed. This might be a good size to use for both the `fileName` variable and the
+`pageName` variable.
+
+
+**The Use of typedef Might Help**
+The [typedef declaration][6] provides a way to declare an identifier as a type alias, to be used to replace a possibly complex type name.
+By using typedef in the struct declarations the structs becomes types similar in some ways to `int`, `double` and `char`.
+
+    typedef struct detailsnode
+    {
+        struct detailsnode *next;
+        int FixationIndex;
+        int Timestamp;
+        int FixationDuration;
+        int FixationPointX;
+        int FixationPointY;
+    } DetailsNode;
+    
+    typedef struct
+    {
+        DetailsNode *head;
+        DetailsNode *tail;
+        int size;
+    } DetailsRecord;
+    
+    typedef struct webnamesnode
+    {
+        char StimuliName[50];
+        struct webnamesnode *next;
+        DetailsRecord *dummyNodeOFdetails;
+    } WebNamesNode;
+    
+    typedef struct webNamesRecord
+    {
+        WebNamesNode *head;
+        WebNamesNode *tail;
+        int size;
+    } WebNamesRecord;
+    
+Using the typedef statements above the following in the rest of the code.
+
+    WebNamesRecord *makeMainList()
+    {
+        WebNamesRecord *l1;
+        
+        l1 = (WebNamesRecord *) malloc(sizeof(WebNamesRecord));
+        
+        ...
+    
+        
+        return l1;
+    }
+
+    void makeNodeForMainList(WebNamesRecord *l1, char StimuliName[50])
+    {
+        WebNamesNode *insert = NULL;
+        
+        insert = (WebNamesNode*) malloc(sizeof(WebNamesNode));
+        strcpy(insert->StimuliName, StimuliName);
+        insert->next = NULL;
+        
+        l1->tail->next = insert;
+        l1->tail = insert;
+        l1->size++;
+    }
+
+**Inconsistent Function Naming Conventions**
+
+The problem required six specific functions that were named in a particular style *verb*_*word*_*word*,
+this should have created a naming standard for all the functions in the program. So functions such as
+`makeMainList()` are inconsistent with the specified naming convention and probably should have been
+named `make_main_list()`.
+
+Many companies have coding standards that require functions to be named in a specific manner. Once
+a naming convention has been established it is better to follow that convention so that other's that
+have to maintain the code can understand it better.
+
+**Reduce Complexity, Follow SRP**
+
+The [Single Responsibility Principle states][2] that every module or class should have responsibility over
+a single part of the functionality provided by the software, and that responsibility should be
+entirely encapsulated by the class. All its services should be narrowly aligned with that responsibility.
+
+    Robert C. Martin expresses the principle as follows:
+        `A class should have only one reason to change.`
+
+While this is primarily targeted at classes in object oriented languages it applies to functions and
+subroutines in procedural languages like C as well.
+
+There seem to be 2 functions that may be overly complex and could benefit by applying SRP, `main()`
+and `load_data_points()`.
+
+The `main() function could be reduced in complexity by creating the function `execute_menu_loop(struct webNamesRecord *mylist)`. The `execute_menu_loop(struct webNamesRecord *mylist)` function would consist of the `do while` loop that might consist of 2 sub functions `int show_menu_get_option()` and a function to implement `case` 3, perhaps `get_page_name_call_show_AOI_statistics()'. Amoung other things this will reduce the list of variables at the top of `main()`.
+
+The function `load_data_points(char fileName[])` could be reduced in complexity by
+- Creating the function FILE* get_file_pointer_from_file_name(char *fileName) 
+- Rather than scanning for individual variables using fscanf() scan an entire line from the file at one time using char [*fgets(char *str, int n, FILE *stream)][4] and then use [sscanf(str, "%d %d %d %d %d %s", &FixationIndex, &Timestamp, &FixationDuration, &FixationPointX, &FixationPointY, StimuliName)][5] to parse the resulting string.
+- Move the contents of the second while loop into it's own function.
+
+    FILE* get_file_pointer_from_file_name(char *fileName)
+    {
+        FILE *eyeTrack = NULL;
+    
+        do
+        {
+            eyeTrack = fopen(fileName, "r");
+            if (!eyeTrack)
+            {
+                printf("Failed to open the file %s\n\n", fileName);
+                printf("Enter file name: ");
+                scanf("%s", fileName);
+            }
+        } while(eyeTrack == NULL);
+    
+        return  eyeTrack;
+    }
+    
+    #define STIMULINAME_LENGTH 64
+    void parse_string_append_nodes_to_list(char *inputLine, WebNamesRecord *l1)
+    {
+        int FixationIndex, Timestamp, FixationDuration, FixationPointX, FixationPointY;
+        char StimuliName[STIMULINAME_LENGTH];
+        static char previousStimuliName[STIMULINAME_LENGTH] = "web";
+        DetailsRecord *l2 = NULL;
+    
+        sscanf(inputLine, "%d %d %d %d %d %s", &FixationIndex, &Timestamp, &FixationDuration, &FixationPointX, &FixationPointY, StimuliName);
+        
+        ...
+
+    }
+    
+    #define MAX_LINE_LENGTH 1024
+    struct webNamesRecord *load_data_points(char fileName[])
+    {
+        WebNamesRecord *l1 = NULL;
+        char textLineInFile[MAX_LINE_LENGTH];
+        
+        FILE *eyeTrack = get_file_pointer_from_file_name(fileName);
+        
+        fgets(textLineInFile, MAX_LINE_LENGTH, eyeTrack);   // Get the first line in the data file which is not used
+        
+        l1 = makeMainList();    //makes main list and dummy node for it only one time
+        
+        //reads the file and put them into variables
+        while(fgets(textLineInFile, MAX_LINE_LENGTH, eyeTrack))
+        {
+            parse_string_append_nodes_to_list(textLineInFile, l1);
+        }
+        return l1;
+    }
+
+**The Don't Repeat Yourself Princple**
+
+In software engineering, [don't repeat yourself (DRY)][3] is a principle of software development, aimed at reducing repetition of information of all kinds, especially useful in multi-tier architectures.
+
+The following code is used in the program at least twice:
+
+        if(!isInList(l1, strlwr(website)))
+        {
+            printf("ERROR: not in the list\n");
+            // 1 control statement following
+        }
+
+Perhaps a new function should be added:
+
+    int check_list_membership(char *pageName, struct webNamesRecord *mylist)
+    {
+        if (!isInList(mylist, strlwr(website)))
+        {
+            printf("ERROR: Web Page %s not in the list of data sources\n", pageName);
+            return 0;
+        }
+    
+        return 1;
+    }
+
+Usage :
+
+    if (!check_list_membership(pageName, mylist)) {
+        // control statement return or break.
+    }
+
+This ensures that the same error message will be used in both places and allow the error message
+to include the name of the webpage.
+
+**Unused Items in the Program**
+
+My compiler flags a number of variables that are unused in the program:
+
+- in `main()` the entire first line declaring the integer variables FixationIndex, `Timestamp`, `FixationDuration`, `FixationPointX` and `FixationPointY` is unnecessary since none of the variables are used in this function.
+- in `show_page_statistics()` the character array `converted` is unused.
+- in `load_data_points()` the struct webNamesNode pointer `temp` is unused. 
+- in `makeNodeForSubList()` the struct detailsNode pointer `temp` is unused.
+- in `makeNodeForMainList()` the struct webNamesNode pointer `temp` is unused.
+
+In `main()` the label `beginning` is unused because there is no `goto`.
+
+All of these unused items tend to indicate the program is unfinished and may be buggy. It might be
+a better practice to create symbols as they are needed in the code, and delete symbols that are
+no longer used. Also having a label in the code may make one wonder why a `goto` was ever considered
+in the code.
+
+
+  [1]: http://stackoverflow.com/questions/26327812/strupr-and-strlwr-in-string-h-part-are-of-the-ansi-standard
+  [2]: https://en.wikipedia.org/wiki/Single_responsibility_principle
+  [3]: https://en.wikipedia.org/wiki/Don%27t_repeat_yourself
+  [4]: https://www.tutorialspoint.com/c_standard_library/c_function_fgets.htm
+  [5]: https://www.tutorialspoint.com/c_standard_library/c_function_sscanf.htm
+  [6]: http://en.cppreference.com/w/c/language/typedef
+  
